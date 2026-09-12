@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+*/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration (per-machine, never committed)
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Native / CMake build intermediates
+app/.cxx/
+app/build/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Deliberately a plain platform theme, not an AppCompat/DayNight one:
+        this app has no AppCompat dependency, and all real theming (colors,
+        typography, dark mode) is handled in Kotlin by K2PadTheme via Compose
+        Material3 (see ui/theme/Theme.kt). This XML theme only affects the
+        window background shown for an instant before Compose takes over.
+    -->
+    <style name="Theme.K2Pad" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

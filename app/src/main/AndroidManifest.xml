@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Phase 1 deliberately requests NO permissions.
+
+        No INTERNET permission: K2Pad has no telemetry and no cloud/account
+        requirement (see project brief, section 22), so it is left out entirely
+        rather than added "just in case".
+
+        Shizuku binding, foreground-service (with the Android 14+ specialUse
+        type + reason string), and any input-related permissions are introduced
+        in the phases that actually need them (Phases 4-7), not before.
+    -->
+
+    <application
+        android:name=".K2PadApplication"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.K2Pad"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="unspecified"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:theme="@style/Theme.K2Pad">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>
