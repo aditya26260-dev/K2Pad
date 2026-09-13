@@ -1,6 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
@@ -69,10 +69,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
     }
@@ -81,6 +77,18 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+// jvmTarget now lives here instead of the old android.kotlinOptions{} block:
+// that block was contributed BY the org.jetbrains.kotlin.android plugin, which
+// this project no longer applies (AGP 9's built-in Kotlin replaces it). The
+// top-level kotlin{} extension is still provided either way — with the old
+// plugin (AGP 8) or with built-in Kotlin (AGP 9) — so this is the
+// forward-compatible spot for compiler options going forward.
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

@@ -77,7 +77,8 @@ K2Pad never fakes a `SUPPORTED` result.
 |---|---|---|
 | Android Gradle Plugin | 9.3.0 | Current stable is 9.4.0 (~1 week old as of writing); 9.3.0 is a couple of months field-tested and already supports up to API 37 |
 | Gradle | 9.5.0 | AGP 9.3.0's documented minimum **and** default required version |
-| Kotlin | 2.4.0 | Current stable (released July 14, 2026); 2.5.0 isn't due until December 2026 |
+| Kotlin | AGP-bundled (built-in Kotlin, AGP 9+) | See correction note below — no separate Kotlin plugin/version controls compilation |
+| Compose Compiler plugin | `org.jetbrains.kotlin.plugin.compose` 2.2.21 | Required separately since Kotlin 2.0 (Compose compiler is no longer bundled into the Kotlin compiler); 2.2.21 confirmed working alongside AGP 9.3.0 in real-world reports |
 | JDK | 17 | AGP 9.3.0's documented minimum/default |
 | compileSdk | 37 (Android 17) | Compose 1.12 (in the BOM below) itself compiles against API 37 |
 | targetSdk | 36 (Android 16) | Matches the dev device's own OS version; held one level behind compileSdk on purpose — API 37 removes the opt-out for large-screen orientation/resizability enforcement, which we don't want to fight while the core engine (Phases 2-6) is still being built |
@@ -85,6 +86,16 @@ K2Pad never fakes a `SUPPORTED` result.
 | NDK | 28.2.13676358 | AGP 9.3.0's documented default side-by-side NDK version |
 | CMake | not pinned | Left to the AGP/SDK-managed default rather than guessed — see comment in `app/build.gradle.kts` |
 | Compose BOM | 2026.08.00 | Current stable (Jetpack Compose Aug 2026 release) |
+
+**Correction found by a real CI failure:** AGP 9+ has Kotlin support *built
+in*; applying the separate `org.jetbrains.kotlin.android` plugin (Phase 1
+originally did) is now a hard build error, not just redundant. Fixed by
+removing that plugin and moving `jvmTarget` from the old
+`android.kotlinOptions{}` block to a top-level `kotlin { compilerOptions {} }`
+block. This also surfaced a second, related gap: Kotlin 2.0+ requires the
+Compose Compiler as its own separately-applied plugin
+(`org.jetbrains.kotlin.plugin.compose`), which was missing entirely and would
+have failed next. Both are fixed as of the commit that added this note.
 
 `androidx.core`, `androidx.lifecycle`, `androidx.activity`, and the test
 libraries in `gradle/libs.versions.toml` are reasonable current estimates, not
@@ -98,31 +109,35 @@ own `v9.5.0` release tag — not hand-reconstructed — so it should work as-is.
 
 ## Building
 
-**Primary path — Android Studio** (needed regardless, to resolve the Android
-SDK platform, build-tools, and the pinned NDK/CMake side-by-side packages):
+**Primary path — GitHub Actions** (no desktop/Android Studio required):
+`.github/workflows/android-ci.yml` runs `./gradlew test` and
+`./gradlew assembleDebug` on GitHub's own x86_64 infrastructure with full
+internet access — push to `main` (or trigger it manually via the Actions
+tab's "Run workflow" button) and download the resulting `k2pad-debug-apk`
+artifact from the run page to install on-device. This is the authoritative
+build signal for this project; nothing about it depends on the local
+machine's architecture.
+
+**If you have Android Studio available**, it works too and is the easiest
+way to resolve the Android SDK platform, build-tools, and pinned NDK/CMake
+packages locally:
 
 1. Open the cloned `K2Pad/` folder in Android Studio (current stable channel).
 2. Let it sync — first sync downloads the NDK and may take a few minutes.
 3. Run ▶ on a device/emulator, or `Build > Build Bundle(s)/APK(s) > Build APK(s)`.
 
-**Command line** (once Android Studio has synced at least once, or if you have
-the SDK/NDK components installed some other way):
+**Command line** (once something — Android Studio, or manually — has
+resolved the SDK/NDK components):
 
 ```
 ./gradlew assembleDebug
 ./gradlew test
 ```
 
-**Termux**: fine for the git/unzip/copy workflow below, but Termux alone does
+**Termux**: handles the git/unzip/copy workflow well, but Termux alone does
 not include the Android SDK/NDK, so `./gradlew assembleDebug` will not
 succeed purely inside Termux unless you separately install SDK components
-there. Android Studio is the recommended build path; Termux is the recommended
-repo-management path.
-
-**CI**: `.github/workflows/android-ci.yml` runs `./gradlew test` and
-`./gradlew assembleDebug` on GitHub's own infrastructure (full internet
-access), giving an authoritative build signal independent of both the
-generating sandbox and your local machine.
+there (possible, but more fragile than letting CI build it).
 
 ## Roadmap
 

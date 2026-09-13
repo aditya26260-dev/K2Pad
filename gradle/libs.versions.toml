@@ -2,14 +2,23 @@
 # --- Toolchain (verified against Google's AGP 9.3.0 release notes / Kotlin release notes
 #     as of Sept 2026 — see README.md "Build tooling" section for sources/rationale) ---
 agp = "9.3.0"
-kotlin = "2.4.0"
+# AGP 9+ has Kotlin support BUILT IN (see root build.gradle.kts comment) — we no longer
+# apply org.jetbrains.kotlin.android, and the Kotlin *compiler* version is whatever AGP
+# 9.3.0 bundles, not something this catalog controls directly. This "kotlin" entry now
+# only versions the one Kotlin-ecosystem plugin we still apply ourselves: the Compose
+# Compiler Gradle plugin, which must be applied explicitly for Kotlin 2.0+ (the Compose
+# compiler is no longer bundled into the Kotlin compiler itself). 2.2.21 is the version
+# confirmed working alongside AGP 9.3.0 in real-world reports as of this writing; if a
+# future CI run shows a Compose-compiler/Kotlin version mismatch, this is the one number
+# to bump.
+kotlin = "2.2.21"
 
 # --- AndroidX / Compose ---
 # composeBom is the one version below that's directly verified against the Aug 2026
-# Jetpack Compose release notes. The others (coreKtx, lifecycle, activityCompose,
-# test libs) are reasonable current estimates, NOT individually re-verified line by
-# line — Android Studio's first sync will likely suggest small patch bumps for these;
-# accepting those suggestions is expected and safe.
+# Jetpack Compose release notes. The others (coreKtx, lifecycle, activityCompose, test
+# libs) are reasonable current estimates, NOT individually re-verified line by line —
+# Android Studio's first sync will likely suggest small patch bumps for these; accepting
+# those suggestions is expected and safe.
 coreKtx = "1.16.0"
 lifecycleRuntimeKtx = "2.9.0"
 activityCompose = "1.11.0"
@@ -36,4 +45,4 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
