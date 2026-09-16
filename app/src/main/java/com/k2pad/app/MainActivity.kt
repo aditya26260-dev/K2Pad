@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -34,6 +37,7 @@ import com.k2pad.app.mapping.GamepadState
 import com.k2pad.app.mapping.MappingEngine
 import com.k2pad.app.mapping.MouseButton
 import com.k2pad.app.mapping.WheelDirection
+import com.k2pad.app.nativebridge.NativeBridge
 import com.k2pad.app.ui.theme.K2PadTheme
 import kotlinx.coroutines.delay
 
@@ -88,6 +92,8 @@ fun Phase3PreviewScreen(mappingEngine: MappingEngine) {
     val view = LocalView.current
     var state by remember { mutableStateOf(GamepadState.NEUTRAL) }
     var mouseCaptured by remember { mutableStateOf(false) }
+    var uinputTestResult by remember { mutableStateOf("(not run yet)") }
+    val scrollState = rememberScrollState()
 
     // Mouse: View.requestPointerCapture() + OnCapturedPointerListener is
     // the current, documented Android API for exclusive/relative mouse
@@ -145,7 +151,8 @@ fun Phase3PreviewScreen(mappingEngine: MappingEngine) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(24.dp),
+                .padding(24.dp)
+                .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -197,6 +204,28 @@ fun Phase3PreviewScreen(mappingEngine: MappingEngine) {
                     if (state.start) append("START ")
                     if (isEmpty()) append("(none)")
                 },
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            HorizontalDivider()
+
+            Text(
+                text = "Phase 4: Native uinput self-test",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "Runs the real open/configure/create/write/destroy uinput sequence " +
+                    "on this device via a direct (unprivileged) open of /dev/uinput. A " +
+                    "permission failure at step 1 is an expected, useful result here, not " +
+                    "a bug — it's this device telling us it needs the privileged path " +
+                    "(Shizuku, Phase 5) rather than a plain app process.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Button(onClick = { uinputTestResult = NativeBridge.runUinputSelfTest() }) {
+                Text("Run native uinput self-test")
+            }
+            Text(
+                text = uinputTestResult,
                 style = MaterialTheme.typography.bodyLarge
             )
         }
