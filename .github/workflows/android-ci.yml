@@ -43,7 +43,22 @@ jobs:
         # even though the licenses were accepted fine.
         run: |
           yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" "ndk;28.2.13676358"
+
+          # API 37's platform package apparently shifted to a minor-suffixed
+          # name (platforms;android-37.0) instead of the bare
+          # "platforms;android-37" every earlier API level used — discover
+          # the real installable name from the live repository listing
+          # instead of hardcoding a second guess, with a safe fallback to
+          # the last API level already confirmed to exist under the plain
+          # name.
+          PLATFORM_PKG=$(sdkmanager --list 2>/dev/null | grep -oE "platforms;android-37(\.[0-9]+)?" | sort -V | tail -n1)
+          if [ -z "$PLATFORM_PKG" ]; then
+            echo "No android-37 platform package found; falling back to android-36"
+            PLATFORM_PKG="platforms;android-36"
+          fi
+          echo "Installing platform package: $PLATFORM_PKG"
+
+          sdkmanager "platform-tools" "$PLATFORM_PKG" "build-tools;36.0.0" "ndk;28.2.13676358"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
