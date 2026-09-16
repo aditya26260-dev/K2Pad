@@ -21,14 +21,29 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
+      - name: Configure Android SDK environment
+        # ubuntu-latest runners ship with an Android SDK already installed
+        # (github.com/actions/runner-images) — no separate setup action is
+        # needed, just point at it and put its cmdline-tools on PATH.
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Install NDK pinned in app/build.gradle.kts (ndkVersion)
-        run: sdkmanager --install "ndk;28.2.13676358"
+      - name: Install required Android SDK + NDK components
+        # Explicit package list instead of a third-party action: avoids
+        # android-actions/setup-android's own "sdkmanager tools" call, which
+        # fails outright since Google removed the legacy 'tools' package —
+        # confirmed in that action's own docs, not something on our side.
+        # `|| true` on the license line specifically: `yes | sdkmanager` can
+        # exit via SIGPIPE once sdkmanager stops reading, which GitHub
+        # Actions' pipefail-enabled bash would otherwise treat as a failure
+        # even though the licenses were accepted fine.
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" "ndk;28.2.13676358"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
