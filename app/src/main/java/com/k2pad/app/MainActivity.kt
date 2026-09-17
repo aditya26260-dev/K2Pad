@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,12 +39,13 @@ import com.k2pad.app.mapping.MappingEngine
 import com.k2pad.app.mapping.MouseButton
 import com.k2pad.app.mapping.WheelDirection
 import com.k2pad.app.nativebridge.NativeBridge
+import com.k2pad.app.shizuku.ShizukuManager
 import com.k2pad.app.ui.theme.K2PadTheme
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     // Deliberately a plain field, not a ViewModel: this whole screen is a
-    // temporary local-preview stopgap (see Phase3PreviewScreen doc) that
+    // temporary local-preview stopgap (see DevPreviewScreen doc) that
     // Phase 6+ replaces outright, so it isn't worth surviving rotation.
     private val mappingEngine = MappingEngine()
 
@@ -56,7 +58,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Phase3PreviewScreen(mappingEngine = mappingEngine)
+                    DevPreviewScreen(mappingEngine = mappingEngine)
                 }
             }
         }
@@ -84,16 +86,38 @@ class MainActivity : ComponentActivity() {
         }
         return super.dispatchKeyEvent(event)
     }
+
+    override fun onDestroy() {
+        // Only unbinds/unregisters if this Activity is actually finishing,
+        // not on a config-change recreation — Shizuku's connection is
+        // meant to outlive individual screens, which is why start() lives
+        // in K2PadApplication rather than here.
+        if (isFinishing) {
+            ShizukuManager.stop()
+        }
+        super.onDestroy()
+    }
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun Phase3PreviewScreen(mappingEngine: MappingEngine) {
+fun DevPreviewScreen(mappingEngine: MappingEngine) {
     val view = LocalView.current
+    val context = LocalContext.current
     var state by remember { mutableStateOf(GamepadState.NEUTRAL) }
     var mouseCaptured by remember { mutableStateOf(false) }
     var uinputTestResult by remember { mutableStateOf("(not run yet)") }
+    var shizukuState by remember { mutableStateOf<ShizukuManager.State>(ShizukuManager.State.NotInstalled) }
     val scrollState = rememberScrollState()
+
+    DisposableEffect(Unit) {
+        // ShizukuManager currently supports only one active listener at a
+        // time (see its addListener doc) — fine for this single-screen
+        // app; a future multi-screen Diagnostics UI (Phase 7) would need
+        // ShizukuManager to support a real list of listeners instead.
+        ShizukuManager.addListener { shizukuState = it }
+        onDispose { }
+    }
 
     // Mouse: View.requestPointerCapture() + OnCapturedPointerListener is
     // the current, documented Android API for exclusive/relative mouse
@@ -228,8 +252,46 @@ fun Phase3PreviewScreen(mappingEngine: MappingEngine) {
                 text = uinputTestResult,
                 style = MaterialTheme.typography.bodyLarge
             )
+
+            HorizontalDivider()
+
+            Text(
+                text = "Phase 5: Shizuku",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "Checks whether the Shizuku app is installed and reachable, and " +
+                    "requests its permission. On grant, K2Pad binds its privileged helper " +
+                    "(a separate process Shizuku starts as shell/root) — that's what will " +
+                    "actually open /dev/uinput and the keyboard/mouse's evdev nodes on your " +
+                    "device's behalf. Nothing yet DOES anything with that connection beyond " +
+                    "establishing it; that's Phase 6.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Button(onClick = { ShizukuManager.refreshAvailability(context) }) {
+                Text("Check Shizuku")
+            }
+            if (shizukuState is ShizukuManager.State.PermissionNeeded) {
+                Button(onClick = { ShizukuManager.requestPermission() }) {
+                    Text("Request Shizuku permission")
+                }
+            }
+            Text(
+                text = "Status: " + describeShizukuState(shizukuState),
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
+}
+
+private fun describeShizukuState(state: ShizukuManager.State): String = when (state) {
+    is ShizukuManager.State.NotInstalled -> "Shizuku app not installed"
+    is ShizukuManager.State.NotRunning -> "Shizuku installed but not running — open it and tap Start"
+    is ShizukuManager.State.PermissionNeeded -> "Permission not yet granted"
+    is ShizukuManager.State.PermissionDenied -> "Permission denied"
+    is ShizukuManager.State.Connecting -> "Connecting…"
+    is ShizukuManager.State.Connected -> "Connected — privileged helper is bound and ready"
+    is ShizukuManager.State.Unavailable -> "Unavailable: ${state.reason}"
 }
 
 private fun mouseButtonFor(actionButton: Int): MouseButton? = when (actionButton) {
@@ -241,8 +303,8 @@ private fun mouseButtonFor(actionButton: Int): MouseButton? = when (actionButton
 
 @Preview(showBackground = true)
 @Composable
-fun Phase3PreviewScreenPreview() {
+fun DevPreviewScreenPreview() {
     K2PadTheme {
-        Phase3PreviewScreen(mappingEngine = MappingEngine())
+        DevPreviewScreen(mappingEngine = MappingEngine())
     }
 }

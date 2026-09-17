@@ -71,6 +71,12 @@ android {
 
     buildFeatures {
         compose = true
+        // Required for IUInputService.aidl to actually generate its Java
+        // stub — AGP has defaulted this to false since 8.0 (confirmed
+        // against Android's own BuildFeatures API reference), so without
+        // this the AIDL file compiles into nothing and every reference to
+        // IUInputService fails with an unresolved-reference error.
+        aidl = true
     }
 
     packaging {
@@ -101,6 +107,8 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 
     testImplementation(libs.junit)
 

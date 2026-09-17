@@ -1,19 +1,20 @@
 package com.k2pad.app
 
 import android.app.Application
+import com.k2pad.app.shizuku.ShizukuManager
 
 /**
  * Application entry point.
  *
- * Intentionally minimal in Phase 1. From Phase 5 onward this is where the
- * Shizuku connection listener gets registered (Shizuku recommends binding
- * that listener as early as possible, before any Activity is created), and
- * later where ProfileManager loads the last-used profile from disk.
+ * Phase 5: registers ShizukuManager's listener as early as possible, per
+ * Shizuku's own guidance to do this before any binder-dependent call
+ * happens — not tied to any one Activity's lifecycle, since the
+ * connection should persist across screens.
  */
 class K2PadApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Nothing yet — see class doc above for what lands here in later phases.
+        ShizukuManager.start(this)
     }
 }

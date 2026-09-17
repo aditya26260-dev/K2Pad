@@ -35,6 +35,24 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Shizuku's own required provider (Phase 5). This is how the app
+            receives Shizuku's binder — it does not expose any of K2Pad's
+            own data. android:exported="true" plus the
+            INTERACT_ACROSS_USERS_FULL permission requirement are both
+            exactly as Shizuku's own documentation specifies (that
+            permission is what stops normal apps from calling into it) —
+            verified against the official Shizuku-API README, not
+            reconstructed from partial memory.
+        -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
     </application>
 
 </manifest>
