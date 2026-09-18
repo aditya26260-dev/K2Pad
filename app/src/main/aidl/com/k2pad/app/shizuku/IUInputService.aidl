@@ -15,17 +15,17 @@ interface IUInputService {
      * (e.g. EACCES if even the shell/root UID can't reach it on this
      * device's SELinux policy).
      */
-    ParcelFileDescriptor openUinput();
+    ParcelFileDescriptor openUinput() = 1;
 
     /**
      * Privileged open of a specific /dev/input/eventX node (O_RDONLY |
      * O_NONBLOCK) for reading the physical keyboard/mouse. Returns null on
      * failure — see getLastErrno().
      */
-    ParcelFileDescriptor openEvdevDevice(String path);
+    ParcelFileDescriptor openEvdevDevice(String path) = 2;
 
     /** errno from the most recent open*() call on THIS service instance, or 0 if it succeeded. */
-    int getLastErrno();
+    int getLastErrno() = 3;
 
     // Shizuku calls this via a hardcoded transaction code when it needs to
     // tear the user-service process down (e.g. on version mismatch or
@@ -33,5 +33,12 @@ interface IUInputService {
     // "= 16777114" here is not arbitrary — it's the exact value confirmed
     // both in Shizuku's own README and, verbatim, in its official demo
     // module's IUserService.aidl (RikkaApps/Shizuku-API, demo/src/main/aidl).
+    //
+    // AIDL rule that bit me here: once ANY method in an interface has an
+    // explicit "= N" id, EVERY method needs one ("You must either assign
+    // id's to all methods or to none of them") — confirmed directly by the
+    // compiler error, and matches what both real reference files
+    // (IShizukuService.aidl and the demo's IUserService.aidl) actually do:
+    // every single method in each has an explicit id, not just destroy().
     void destroy() = 16777114;
 }
