@@ -35,9 +35,15 @@ class UInputUserService : IUInputService.Stub() {
     override fun getLastErrno(): Int = lastErrno
 
     private fun openPath(path: String, flags: Int): ParcelFileDescriptor? {
+        var fd: java.io.FileDescriptor? = null
         return try {
-            val fd = Os.open(path, flags, 0)
+            fd = Os.open(path, flags, 0)
             lastErrno = 0
+            // dup() gives the returned ParcelFileDescriptor its own
+            // underlying descriptor; this process's own `fd` isn't needed
+            // after that, so it's closed explicitly rather than left open
+            // for this (potentially long-lived, daemon(false) but
+            // multi-call) helper process's whole lifetime.
             ParcelFileDescriptor.dup(fd)
         } catch (e: ErrnoException) {
             // Never swallowed: the real errno is preserved exactly, for
@@ -47,6 +53,21 @@ class UInputUserService : IUInputService.Stub() {
             // JNI one.
             lastErrno = e.errno
             null
+        } catch (e: java.io.IOException) {
+            // ParcelFileDescriptor.dup() itself can throw IOException
+            // (distinct from ErrnoException) if the dup fails — caught
+            // separately so it's reported instead of crashing this
+            // process, but there's no real errno to surface for it.
+            lastErrno = -1
+            null
+        } finally {
+            if (fd != null) {
+                try {
+                    Os.close(fd)
+                } catch (e: ErrnoException) {
+                    // Already gone; nothing left to do.
+                }
+            }
         }
     }
 

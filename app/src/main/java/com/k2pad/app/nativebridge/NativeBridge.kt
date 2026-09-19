@@ -1,5 +1,7 @@
 package com.k2pad.app.nativebridge
 
+import com.k2pad.app.mapping.GamepadState
+
 /**
  * Thin bridge to the native (C++) layer.
  *
@@ -72,6 +74,111 @@ object NativeBridge {
         }
     }
 
+    /**
+     * Configures capabilities and creates the real virtual gamepad on an
+     * already-open, privileged file descriptor (from
+     * [com.k2pad.app.backend.ShizukuUinputBackend]). Returns 0 on success,
+     * -errno on failure — never throws.
+     */
+    fun uinputCreate(fd: Int): Int {
+        if (!loaded) return -1
+        return try {
+            nativeUinputCreate(fd)
+        } catch (t: Throwable) {
+            -1
+        }
+    }
+
+    /**
+     * The actual "convert to native ranges only at the backend boundary"
+     * step from project brief section 26: [state]'s normalized values get
+     * scaled to uinput's real axis ranges and packed into a button bitmask
+     * HERE, in the one place that's allowed to know both shapes — nothing
+     * upstream of this (MappingEngine, the backend interface) or the
+     * native code downstream deals with un-normalized values otherwise.
+     */
+    fun uinputWriteState(fd: Int, state: GamepadState): Int {
+        if (!loaded) return -1
+        return try {
+            nativeUinputWriteState(
+                fd,
+                scaleStickAxis(state.leftStickX),
+                scaleStickAxis(state.leftStickY),
+                scaleStickAxis(state.rightStickX),
+                scaleStickAxis(state.rightStickY),
+                scaleTriggerAxis(state.leftTrigger),
+                scaleTriggerAxis(state.rightTrigger),
+                packButtons(state),
+                dpadHatX(state),
+                dpadHatY(state),
+            )
+        } catch (t: Throwable) {
+            -1
+        }
+    }
+
+    /** Releases to neutral, destroys the device, and closes [fd]. Never throws. */
+    fun uinputDestroy(fd: Int): Int {
+        if (!loaded) return -1
+        return try {
+            nativeUinputDestroy(fd)
+        } catch (t: Throwable) {
+            -1
+        }
+    }
+
+    // -32768..32767, matching the range create_device() declares for
+    // ABS_X/Y/RX/RY in uinput_backend.cpp — must stay in sync with it.
+    private fun scaleStickAxis(value: Float): Int =
+        (value.coerceIn(-1f, 1f) * 32767f).toInt()
+
+    // 0..255, matching ABS_Z/RZ's declared range.
+    private fun scaleTriggerAxis(value: Float): Int =
+        (value.coerceIn(0f, 1f) * 255f).toInt()
+
+    // Bit order (A,B,X,Y,LB,RB,BACK,START,L3,R3) must match kButtonCodes'
+    // order in uinput_backend.cpp exactly — change one, change the other.
+    private fun packButtons(state: GamepadState): Int {
+        var mask = 0
+        if (state.a) mask = mask or (1 shl 0)
+        if (state.b) mask = mask or (1 shl 1)
+        if (state.x) mask = mask or (1 shl 2)
+        if (state.y) mask = mask or (1 shl 3)
+        if (state.lb) mask = mask or (1 shl 4)
+        if (state.rb) mask = mask or (1 shl 5)
+        if (state.back) mask = mask or (1 shl 6)
+        if (state.start) mask = mask or (1 shl 7)
+        if (state.l3) mask = mask or (1 shl 8)
+        if (state.r3) mask = mask or (1 shl 9)
+        return mask
+    }
+
+    // Small enough that duplicating uinput_backend.cpp's dpad_to_hat_x/y
+    // logic here (rather than a JNI round trip just for this) is the
+    // simpler tradeoff — both sides cancel opposite-held pairs to 0.
+    private fun dpadHatX(state: GamepadState): Int = when {
+        state.dpadLeft && state.dpadRight -> 0
+        state.dpadLeft -> -1
+        state.dpadRight -> 1
+        else -> 0
+    }
+
+    private fun dpadHatY(state: GamepadState): Int = when {
+        state.dpadUp && state.dpadDown -> 0
+        state.dpadUp -> -1
+        state.dpadDown -> 1
+        else -> 0
+    }
+
     private external fun nativeGetStatus(): String
     private external fun nativeRunUinputSelfTest(): String
+    private external fun nativeUinputCreate(fd: Int): Int
+    private external fun nativeUinputWriteState(
+        fd: Int,
+        leftStickX: Int, leftStickY: Int,
+        rightStickX: Int, rightStickY: Int,
+        leftTrigger: Int, rightTrigger: Int,
+        buttonsBitmask: Int, hatX: Int, hatY: Int,
+    ): Int
+    private external fun nativeUinputDestroy(fd: Int): Int
 }

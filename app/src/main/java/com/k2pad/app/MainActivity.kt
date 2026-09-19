@@ -1,6 +1,7 @@
 package com.k2pad.app
 
 import android.os.Bundle
+import android.view.InputDevice
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
@@ -33,6 +34,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.k2pad.app.backend.ShizukuUinputBackend
+import com.k2pad.app.backend.VirtualGamepadBackend
 import com.k2pad.app.capture.AndroidKeyCodeMap
 import com.k2pad.app.mapping.GamepadState
 import com.k2pad.app.mapping.MappingEngine
@@ -108,6 +111,9 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
     var mouseCaptured by remember { mutableStateOf(false) }
     var uinputTestResult by remember { mutableStateOf("(not run yet)") }
     var shizukuState by remember { mutableStateOf<ShizukuManager.State>(ShizukuManager.State.NotInstalled) }
+    var backend by remember { mutableStateOf<VirtualGamepadBackend?>(null) }
+    var backendStatus by remember { mutableStateOf("(not started)") }
+    var deviceListResult by remember { mutableStateOf("(not checked)") }
     val scrollState = rememberScrollState()
 
     DisposableEffect(Unit) {
@@ -116,7 +122,13 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
         // app; a future multi-screen Diagnostics UI (Phase 7) would need
         // ShizukuManager to support a real list of listeners instead.
         ShizukuManager.addListener { shizukuState = it }
-        onDispose { }
+        onDispose {
+            // Leaving this screen (not just backgrounding — Compose keeps
+            // this alive across a simple app-switch) tears down the real
+            // gamepad if one was started, matching the failsafe principle
+            // of never leaving state stuck once nothing is driving it.
+            backend?.stop()
+        }
     }
 
     // Mouse: View.requestPointerCapture() + OnCapturedPointerListener is
@@ -149,13 +161,14 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
         onDispose { view.setOnCapturedPointerListener(null) }
     }
 
-    // Polls the engine ~60 times/second purely to refresh this preview's
-    // text. Phase 4+'s real backend loop replaces this with an actual
-    // uinput write cycle — this is only here so the numbers on screen move.
+    // Polls the engine ~60 times/second: refreshes this preview's text, and
+    // — the actual point of Phase 6 — pushes the same state to a real
+    // virtual gamepad once one has been started below.
     LaunchedEffect(Unit) {
         while (true) {
             mappingEngine.tick(0.016f)
             state = mappingEngine.currentState()
+            backend?.writeState(state)
             delay(16L)
         }
     }
@@ -187,9 +200,10 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
             Text(
                 text = "WASD/keys and a captured mouse feed the real MappingEngine below, " +
                     "using Android's own Activity-focus input APIs. This works ONLY while " +
-                    "this window has focus — it is not the system-wide path GTA V needs; " +
-                    "that's the evdev+Shizuku capture built this phase and wired up live in " +
-                    "Phase 5.",
+                    "this window has focus — it is not the system-wide path GTA V needs. " +
+                    "The real evdev+Shizuku capture (EvdevInputSource, built in Phase 3) " +
+                    "still isn't wired to a live device here — Phase 6 wired up the OUTPUT " +
+                    "half (uinput) below; live system-wide input capture is still open.",
                 style = MaterialTheme.typography.bodyLarge
             )
 
@@ -262,10 +276,11 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
             Text(
                 text = "Checks whether the Shizuku app is installed and reachable, and " +
                     "requests its permission. On grant, K2Pad binds its privileged helper " +
-                    "(a separate process Shizuku starts as shell/root) — that's what will " +
-                    "actually open /dev/uinput and the keyboard/mouse's evdev nodes on your " +
-                    "device's behalf. Nothing yet DOES anything with that connection beyond " +
-                    "establishing it; that's Phase 6.",
+                    "(a separate process Shizuku starts as shell/root) — that's what " +
+                    "actually opens /dev/uinput on your device's behalf below. Evdev " +
+                    "capture (opening the keyboard/mouse's own device nodes the same way) " +
+                    "isn't wired up yet — Phase 6 below only used this connection for the " +
+                    "uinput/output side.",
                 style = MaterialTheme.typography.bodyLarge
             )
             Button(onClick = { ShizukuManager.refreshAvailability(context) }) {
@@ -278,6 +293,72 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
             }
             Text(
                 text = "Status: " + describeShizukuState(shizukuState),
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            HorizontalDivider()
+
+            Text(
+                text = "Phase 6: Real virtual gamepad",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "Takes the Shizuku connection above, actually calls openUinput() " +
+                    "through it, and hands the resulting privileged fd to Phase 4's native " +
+                    "code. If this creates the device, the tick loop above starts pushing " +
+                    "the real WASD/mouse state to it — this is the first point in the whole " +
+                    "project where we find out if a real virtual gamepad genuinely works on " +
+                    "this device, not just each piece in isolation.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Button(onClick = {
+                val active = backend
+                if (active != null) {
+                    active.stop()
+                    backend = null
+                    backendStatus = "Stopped"
+                } else {
+                    val connected = shizukuState as? ShizukuManager.State.Connected
+                    if (connected == null) {
+                        backendStatus = "Shizuku isn't connected — use Check Shizuku above first"
+                    } else {
+                        val newBackend = ShizukuUinputBackend(connected.service)
+                        val error = newBackend.start()
+                        if (error == null) {
+                            backend = newBackend
+                            backendStatus = "Started — try 'List input devices' below, or " +
+                                "switch to another app to check for a new controller"
+                        } else {
+                            backendStatus = "Failed to start: $error"
+                        }
+                    }
+                }
+            }) {
+                Text(if (backend != null) "Stop virtual controller" else "Start virtual controller")
+            }
+            Text(
+                text = "Status: $backendStatus",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Button(onClick = {
+                val lines = InputDevice.getDeviceIds().mapNotNull { id ->
+                    InputDevice.getDevice(id)?.let { device ->
+                        val isGamepadOrJoystick =
+                            (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                                (device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+                        device.name + if (isGamepadOrJoystick) "  [gamepad/joystick source]" else ""
+                    }
+                }
+                deviceListResult = if (lines.isEmpty()) {
+                    "(no input devices reported)"
+                } else {
+                    lines.joinToString("\n")
+                }
+            }) {
+                Text("List input devices")
+            }
+            Text(
+                text = deviceListResult,
                 style = MaterialTheme.typography.bodyLarge
             )
         }

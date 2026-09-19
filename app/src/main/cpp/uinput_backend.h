@@ -65,6 +65,24 @@ int destroy_device(const UinputSyscalls* sys, int fd);
 int32_t dpad_to_hat_x(bool left, bool right);
 int32_t dpad_to_hat_y(bool up, bool down);
 
+// Writes one full GamepadState snapshot (already converted to native
+// ranges by the caller — see NativeBridge.kt's uinputWriteState, which is
+// the actual "backend boundary" per section 26) as a batch of ABS/KEY
+// events followed by one SYN_REPORT. Phase 6's first cut: writes every
+// axis/button unconditionally rather than diffing against the previous
+// state — simple and correct first, diffing is a fair Phase 10
+// (performance) optimization if it turns out to matter in practice.
+//
+//   left_x, left_y, right_x, right_y: already-scaled to -32768..32767
+//   left_trigger, right_trigger:      already-scaled to 0..255
+//   buttons_bitmask: bit i (0-indexed) = A,B,X,Y,LB,RB,BACK,START,L3,R3
+//   hat_x, hat_y: -1, 0, or 1
+int write_full_state(
+    const UinputSyscalls* sys, int fd,
+    int32_t left_x, int32_t left_y, int32_t right_x, int32_t right_y,
+    int32_t left_trigger, int32_t right_trigger,
+    int32_t buttons_bitmask, int32_t hat_x, int32_t hat_y);
+
 // Runs the exact 7-step sequence project brief section 29 asks for (open,
 // configure, create, test button, test stick, release, destroy) and
 // returns a human-readable line-by-line report of what happened at each

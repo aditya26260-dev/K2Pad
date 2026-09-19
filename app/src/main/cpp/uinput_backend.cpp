@@ -165,6 +165,42 @@ int32_t dpad_to_hat_y(bool up, bool down) {
     return 0;
 }
 
+int write_full_state(
+    const UinputSyscalls* sys, int fd,
+    int32_t left_x, int32_t left_y, int32_t right_x, int32_t right_y,
+    int32_t left_trigger, int32_t right_trigger,
+    int32_t buttons_bitmask, int32_t hat_x, int32_t hat_y) {
+    int rc;
+
+    rc = write_abs_event(sys, fd, ABS_X, left_x);
+    if (rc != 0) return rc;
+    rc = write_abs_event(sys, fd, ABS_Y, left_y);
+    if (rc != 0) return rc;
+    rc = write_abs_event(sys, fd, ABS_RX, right_x);
+    if (rc != 0) return rc;
+    rc = write_abs_event(sys, fd, ABS_RY, right_y);
+    if (rc != 0) return rc;
+    rc = write_abs_event(sys, fd, ABS_Z, left_trigger);
+    if (rc != 0) return rc;
+    rc = write_abs_event(sys, fd, ABS_RZ, right_trigger);
+    if (rc != 0) return rc;
+    rc = write_abs_event(sys, fd, ABS_HAT0X, hat_x);
+    if (rc != 0) return rc;
+    rc = write_abs_event(sys, fd, ABS_HAT0Y, hat_y);
+    if (rc != 0) return rc;
+
+    // kButtonCodes' order (A,B,X,Y,LB,RB,BACK,START,L3,R3) is the contract
+    // Kotlin's packButtons() in NativeBridge.kt packs bits in — change one,
+    // change the other.
+    for (size_t i = 0; i < sizeof(kButtonCodes) / sizeof(kButtonCodes[0]); i++) {
+        bool pressed = (buttons_bitmask & (1 << i)) != 0;
+        rc = write_key_event(sys, fd, kButtonCodes[i], pressed);
+        if (rc != 0) return rc;
+    }
+
+    return sync_report(sys, fd);
+}
+
 std::string run_self_test(const UinputSyscalls* sys) {
     std::ostringstream out;
 
