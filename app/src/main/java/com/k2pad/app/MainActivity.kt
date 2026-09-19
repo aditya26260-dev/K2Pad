@@ -341,7 +341,7 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
                 style = MaterialTheme.typography.bodyLarge
             )
             Button(onClick = {
-                val lines = InputDevice.getDeviceIds().mapNotNull { id ->
+                val lines = InputDevice.getDeviceIds().toList().mapNotNull { id ->
                     InputDevice.getDevice(id)?.let { device ->
                         val isGamepadOrJoystick =
                             (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
