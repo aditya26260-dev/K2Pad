@@ -34,6 +34,17 @@ class UInputUserService : IUInputService.Stub() {
 
     override fun getLastErrno(): Int = lastErrno
 
+    override fun readRecentLog(): String {
+        return try {
+            val process = ProcessBuilder("logcat", "-d", "-b", "all", "-t", "500")
+                .redirectErrorStream(true)
+                .start()
+            process.inputStream.bufferedReader().readText()
+        } catch (e: Exception) {
+            "logcat failed: ${e.message}"
+        }
+    }
+
     private fun openPath(path: String, flags: Int): ParcelFileDescriptor? {
         var fd: java.io.FileDescriptor? = null
         return try {
@@ -58,6 +69,17 @@ class UInputUserService : IUInputService.Stub() {
             // (distinct from ErrnoException) if the dup fails — caught
             // separately so it's reported instead of crashing this
             // process, but there's no real errno to surface for it.
+            lastErrno = -1
+            null
+        } catch (e: Exception) {
+            // Defensive final net: if this is hit at all, it means the
+            // failure seen on-device ("remote process probably died") was
+            // a genuine Kotlin exception this method didn't anticipate,
+            // NOT a lower-level process kill (a real signal-based kill —
+            // e.g. from a seccomp/SELinux policy that terminates the
+            // process outright rather than returning EACCES — would not
+            // be catchable here at all, and readRecentLog() is what's
+            // meant to help tell those two cases apart).
             lastErrno = -1
             null
         } finally {

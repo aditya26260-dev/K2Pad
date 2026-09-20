@@ -27,6 +27,16 @@ interface IUInputService {
     /** errno from the most recent open*() call on THIS service instance, or 0 if it succeeded. */
     int getLastErrno() = 3;
 
+    /**
+     * Dumps recent logcat output (all buffers) from inside this privileged
+     * process. Added specifically to diagnose the "remote process
+     * probably died" failure on openUinput() without needing ADB/a
+     * computer — shell/root UID can read logs a normal K2Pad app process
+     * cannot. Filtering the (likely large) output down to what matters is
+     * done on the app side, not here, so this stays a dumb passthrough.
+     */
+    String readRecentLog() = 4;
+
     // Shizuku calls this via a hardcoded transaction code when it needs to
     // tear the user-service process down (e.g. on version mismatch or
     // unbind) and can't guarantee a normal typed call will reach it. The

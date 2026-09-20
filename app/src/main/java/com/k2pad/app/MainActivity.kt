@@ -114,6 +114,7 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
     var backend by remember { mutableStateOf<VirtualGamepadBackend?>(null) }
     var backendStatus by remember { mutableStateOf("(not started)") }
     var deviceListResult by remember { mutableStateOf("(not checked)") }
+    var logResult by remember { mutableStateOf("(not read yet)") }
     val scrollState = rememberScrollState()
 
     DisposableEffect(Unit) {
@@ -361,9 +362,73 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
                 text = deviceListResult,
                 style = MaterialTheme.typography.bodyLarge
             )
+
+            HorizontalDivider()
+
+            Text(
+                text = "Diagnostic: privileged log",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "If Start virtual controller reports the fd call failed because " +
+                    "the remote process probably died, this reads recent logcat output " +
+                    "from INSIDE the privileged helper (shell/root can read logs a normal " +
+                    "K2Pad process can't) — no ADB needed — filtered down to lines " +
+                    "mentioning this helper, a crash, or a SELinux denial.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Button(onClick = {
+                // Synchronous/main-thread like every other native/AIDL call
+                // on this temporary dev screen — logcat -d with a 500-line
+                // cap is normally fast, but a slow device could visibly
+                // hitch here. Worth moving to a coroutine if this becomes
+                // a real Diagnostics screen (Phase 7) rather than a
+                // one-off debug button.
+                val connected = shizukuState as? ShizukuManager.State.Connected
+                logResult = if (connected == null) {
+                    "Shizuku isn't connected — use Check Shizuku above first"
+                } else {
+                    try {
+                        val fullLog = connected.service.readRecentLog()
+                        val relevant = fullLog.lineSequence()
+                            .filter { line ->
+                                RELEVANT_LOG_MARKERS.any { marker -> line.contains(marker, ignoreCase = true) }
+                            }
+                            .joinToString("\n")
+                        if (relevant.isBlank()) {
+                            "(no matching lines in the last 500 log entries across all buffers)"
+                        } else {
+                            relevant
+                        }
+                    } catch (t: Throwable) {
+                        "readRecentLog() call failed: ${t.message}"
+                    }
+                }
+            }) {
+                Text("Read privileged log")
+            }
+            Text(
+                text = logResult,
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
 }
+
+// Deliberately broad rather than trying to guess the one exact tag: covers
+// our own process/package, standard Android crash-trace markers, and the
+// kernel's SELinux-denial log prefix, so whichever of these turns out to
+// be the real cause, it should show up.
+private val RELEVANT_LOG_MARKERS = listOf(
+    "uinput_service",
+    "k2pad",
+    "AndroidRuntime",
+    "FATAL EXCEPTION",
+    "avc:",
+    "denied",
+    "libc",
+    "Shizuku",
+)
 
 private fun describeShizukuState(state: ShizukuManager.State): String = when (state) {
     is ShizukuManager.State.NotInstalled -> "Shizuku app not installed"
