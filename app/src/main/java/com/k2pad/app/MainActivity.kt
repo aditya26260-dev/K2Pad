@@ -371,10 +371,13 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
             )
             Text(
                 text = "If Start virtual controller reports the fd call failed because " +
-                    "the remote process probably died, this reads recent logcat output " +
-                    "from INSIDE the privileged helper (shell/root can read logs a normal " +
-                    "K2Pad process can't) — no ADB needed — filtered down to lines " +
-                    "mentioning this helper, a crash, or a SELinux denial.",
+                    "the remote process probably died, tap THIS immediately after — " +
+                    "same visit, no other buttons in between — since this device logs " +
+                    "heavily and the relevant lines can rotate out fast. If this button " +
+                    "itself then fails (rather than just finding nothing), that's a sign " +
+                    "the connection died too: tap Check Shizuku to rebind, then this " +
+                    "again — logcat is a shared system buffer, so a fresh connection can " +
+                    "still see the earlier crash's lines.",
                 style = MaterialTheme.typography.bodyLarge
             )
             Button(onClick = {
@@ -396,12 +399,17 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
                             }
                             .joinToString("\n")
                         if (relevant.isBlank()) {
-                            "(no matching lines in the last 500 log entries across all buffers)"
+                            "Read succeeded but found no matching lines in the last 3000 " +
+                                "log entries — if you just saw the crash, it may have " +
+                                "already rotated out; try reproducing it again immediately " +
+                                "before reading"
                         } else {
                             relevant
                         }
                     } catch (t: Throwable) {
-                        "readRecentLog() call failed: ${t.message}"
+                        "readRecentLog() call itself failed: ${t.message} — this suggests " +
+                            "the connection died, not just that nothing was found. Tap " +
+                            "Check Shizuku to rebind, then try this again."
                     }
                 }
             }) {
@@ -415,17 +423,18 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
     }
 }
 
-// Deliberately broad rather than trying to guess the one exact tag: covers
-// our own process/package, standard Android crash-trace markers, and the
-// kernel's SELinux-denial log prefix, so whichever of these turns out to
-// be the real cause, it should show up.
+// Deliberately specific rather than broad: an earlier version included a
+// bare "k2pad" marker, which matched the package name in routine MIUI
+// touch/window-management logging (visible on a real device test) and
+// buried anything actually relevant under noise. Every marker below is
+// chosen to NOT appear in ordinary system chatter.
 private val RELEVANT_LOG_MARKERS = listOf(
-    "uinput_service",
-    "k2pad",
+    "uinput_service",     // this project's own processNameSuffix
+    "com.k2pad.app:",     // the full separate-process name (package:suffix), not bare "k2pad"
     "AndroidRuntime",
     "FATAL EXCEPTION",
-    "avc:",
-    "denied",
+    "avc: denied",        // the specific SELinux denial format, not just "denied" alone
+    "Fatal signal",
     "libc",
     "Shizuku",
 )

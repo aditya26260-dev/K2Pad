@@ -36,7 +36,11 @@ class UInputUserService : IUInputService.Stub() {
 
     override fun readRecentLog(): String {
         return try {
-            val process = ProcessBuilder("logcat", "-d", "-b", "all", "-t", "500")
+            // -t 3000, not 500: a real on-device test showed this HyperOS
+            // build logs heavily even for routine touch/window events (see
+            // MainActivity's filter comment) — 500 lines was rotating past
+            // the actual crash before this could be read.
+            val process = ProcessBuilder("logcat", "-d", "-b", "all", "-t", "3000")
                 .redirectErrorStream(true)
                 .start()
             process.inputStream.bufferedReader().readText()
