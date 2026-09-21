@@ -4,6 +4,7 @@ import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
+import android.util.Log
 
 /**
  * Runs as shell (UID 2000, if Shizuku was started via ADB) or root (UID 0),
@@ -22,6 +23,19 @@ import android.system.OsConstants
  * in the app should ever construct it.
  */
 class UInputUserService : IUInputService.Stub() {
+
+    companion object {
+        // Distinctive tag, deliberately logged at ERROR level for every
+        // step (not just failures) so nothing gets filtered out — this
+        // exists because a first attempt at reading generic system logs
+        // (AndroidRuntime/libc/avc:) showed no crash trace at all for a
+        // reported "remote process probably died" failure, meaning
+        // whatever happens either isn't a normal JVM-reported crash or
+        // happens somewhere generic filtering missed. Explicit breadcrumbs
+        // around the one call that matters (Os.open) pin down exactly how
+        // far execution gets, rather than continuing to guess.
+        private const val TAG = "K2PadUinputSvc"
+    }
 
     @Volatile
     private var lastErrno: Int = 0
@@ -50,22 +64,27 @@ class UInputUserService : IUInputService.Stub() {
     }
 
     private fun openPath(path: String, flags: Int): ParcelFileDescriptor? {
+        Log.e(TAG, "openPath($path): entered, about to call Os.open")
         var fd: java.io.FileDescriptor? = null
         return try {
             fd = Os.open(path, flags, 0)
+            Log.e(TAG, "openPath($path): Os.open returned successfully")
             lastErrno = 0
             // dup() gives the returned ParcelFileDescriptor its own
             // underlying descriptor; this process's own `fd` isn't needed
             // after that, so it's closed explicitly rather than left open
             // for this (potentially long-lived, daemon(false) but
             // multi-call) helper process's whole lifetime.
-            ParcelFileDescriptor.dup(fd)
+            val result = ParcelFileDescriptor.dup(fd)
+            Log.e(TAG, "openPath($path): ParcelFileDescriptor.dup succeeded, returning to caller")
+            result
         } catch (e: ErrnoException) {
             // Never swallowed: the real errno is preserved exactly, for
             // getLastErrno() to report — same "no silent failures"
             // requirement as the native uinput self-test (project brief
             // section 29), just crossing a Binder boundary instead of a
             // JNI one.
+            Log.e(TAG, "openPath($path): ErrnoException, errno=${e.errno}", e)
             lastErrno = e.errno
             null
         } catch (e: java.io.IOException) {
@@ -73,6 +92,7 @@ class UInputUserService : IUInputService.Stub() {
             // (distinct from ErrnoException) if the dup fails — caught
             // separately so it's reported instead of crashing this
             // process, but there's no real errno to surface for it.
+            Log.e(TAG, "openPath($path): IOException from dup()", e)
             lastErrno = -1
             null
         } catch (e: Exception) {
@@ -82,14 +102,19 @@ class UInputUserService : IUInputService.Stub() {
             // NOT a lower-level process kill (a real signal-based kill —
             // e.g. from a seccomp/SELinux policy that terminates the
             // process outright rather than returning EACCES — would not
-            // be catchable here at all, and readRecentLog() is what's
-            // meant to help tell those two cases apart).
+            // be catchable here at all: if the log shows "entered" for
+            // this path but NEVER shows this line, "Os.open returned", OR
+            // any other exception line, that silence itself is the
+            // evidence of a signal-level kill happening inside Os.open).
+            Log.e(TAG, "openPath($path): unexpected Exception", e)
             lastErrno = -1
             null
         } finally {
+            Log.e(TAG, "openPath($path): finally block reached, fd=$fd")
             if (fd != null) {
                 try {
                     Os.close(fd)
+                    Log.e(TAG, "openPath($path): closed this process's own copy of fd")
                 } catch (e: ErrnoException) {
                     // Already gone; nothing left to do.
                 }
@@ -105,6 +130,7 @@ class UInputUserService : IUInputService.Stub() {
      * it — so cleanup here is just exiting the process itself.
      */
     override fun destroy() {
+        Log.e(TAG, "destroy() called")
         System.exit(0)
     }
 }

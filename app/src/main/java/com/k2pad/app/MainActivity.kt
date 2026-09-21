@@ -429,6 +429,7 @@ fun DevPreviewScreen(mappingEngine: MappingEngine) {
 // buried anything actually relevant under noise. Every marker below is
 // chosen to NOT appear in ordinary system chatter.
 private val RELEVANT_LOG_MARKERS = listOf(
+    "K2PadUinputSvc",     // this file's own explicit breadcrumbs — check these first
     "uinput_service",     // this project's own processNameSuffix
     "com.k2pad.app:",     // the full separate-process name (package:suffix), not bare "k2pad"
     "AndroidRuntime",
